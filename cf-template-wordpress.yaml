@@ -29,38 +29,44 @@ Resources:
     Type: AWS::EC2::Instance
     Properties:
       InstanceType: t2.micro
-      KeyName: !Ref KeyName
+      KeyName:
+        Ref: KeyName
       SecurityGroupIds:
-        - !Ref WordPressInstanceSecurityGroup
-      ImageId: ami-0c2b8ca1dad447f8a  # Amazon Linux 2 (region-specific)
+        - Ref: WordPressInstanceSecurityGroup
+      ImageId: ami-05f991c49d264708f  # Amazon Linux 2 (region-specific)
       UserData:
-        Fn::Base64: !Sub |
-          #!/bin/bash
-          yum update -y
-          amazon-linux-extras enable php8.0
-          yum clean metadata
-          yum install -y httpd php php-mysqlnd mariadb
-          systemctl start httpd
-          systemctl enable httpd
-          
-          # Download and configure WordPress
-          cd /var/www/html
-          wget https://wordpress.org/latest.tar.gz
-          tar -xzf latest.tar.gz
-          cp -r wordpress/* .
-          rm -rf wordpress latest.tar.gz
-          
-          # Set permissions
-          chown -R apache:apache /var/www/html
-          chmod -R 755 /var/www/html
-          
-          # Create wp-config with dummy DB config (you can replace it with real one)
-          cp wp-config-sample.php wp-config.php
-          sed -i "s/database_name_here/wordpress/" wp-config.php
-          sed -i "s/username_here/admin/" wp-config.php
-          sed -i "s/password_here/password/" wp-config.php
+        Fn::Base64:
+          Fn::Sub: |
+            #!/bin/bash
+            yum update -y
+            amazon-linux-extras enable php8.0
+            yum clean metadata
+            yum install -y httpd php php-mysqlnd mariadb
+            systemctl start httpd
+            systemctl enable httpd
+
+            # Ensure /var/www/html exists
+            mkdir -p /var/www/html
+
+            # Download and configure WordPress
+            cd /var/www/html
+            wget https://wordpress.org/latest.tar.gz
+            tar -xzf latest.tar.gz
+            cp -r wordpress/* .
+            rm -rf wordpress latest.tar.gz
+
+            # Set permissions
+            chown -R apache:apache /var/www/html
+            chmod -R 755 /var/www/html
+
+            # Create wp-config with dummy DB config (you can replace it with real one)
+            cp wp-config-sample.php wp-config.php
+            sed -i "s/database_name_here/wordpress/" wp-config.php
+            sed -i "s/username_here/admin/" wp-config.php
+            sed -i "s/password_here/password/" wp-config.php
 
 Outputs:
   WebsiteURL:
     Description: WordPress Site URL
-    Value: !Sub "http://${WordPressInstance.PublicDnsName}"
+    Value:
+      Fn::Sub: "http://${WordPressInstance.PublicDnsName}"
