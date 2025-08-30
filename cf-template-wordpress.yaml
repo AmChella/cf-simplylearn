@@ -28,39 +28,157 @@ Resources:
   WordPressInstance:
     Type: AWS::EC2::Instance
     Properties:
-      InstanceType: t2.micro
-      KeyName: !Ref KeyName
+      InstanceType: t4g.medium
+      KeyName:
+        Ref: KeyName
       SecurityGroupIds:
-        - !Ref WordPressInstanceSecurityGroup
-      ImageId: ami-0c2b8ca1dad447f8a  # Amazon Linux 2 (region-specific)
+        - Ref: WordPressInstanceSecurityGroup
+      ImageId: ami-0cf0f6904719783fe # Amazon Linux 2 (region-specific)
       UserData:
-        Fn::Base64: !Sub |
-          #!/bin/bash
-          yum update -y
-          amazon-linux-extras enable php8.0
-          yum clean metadata
-          yum install -y httpd php php-mysqlnd mariadb
-          systemctl start httpd
-          systemctl enable httpd
-          
-          # Download and configure WordPress
-          cd /var/www/html
-          wget https://wordpress.org/latest.tar.gz
-          tar -xzf latest.tar.gz
-          cp -r wordpress/* .
-          rm -rf wordpress latest.tar.gz
-          
-          # Set permissions
-          chown -R apache:apache /var/www/html
-          chmod -R 755 /var/www/html
-          
-          # Create wp-config with dummy DB config (you can replace it with real one)
-          cp wp-config-sample.php wp-config.php
-          sed -i "s/database_name_here/wordpress/" wp-config.php
-          sed -i "s/username_here/admin/" wp-config.php
-          sed -i "s/password_here/password/" wp-config.php
+        Fn::Base64:
+          Fn::Sub: |
+            #!/bin/bash
+            yum update -y
+            yum install -y php8.4
+            yum install -y httpd php php-mysqlnd
+            yum install -y mariadb105-server
+            yum install -y php-mysqli
+            yum install -y php-gd php-xml php-mbstring php-json php-curl
+            systemctl start mariadb
+            systemctl start httpd
+            systemctl enable httpd
+
+            # Ensure /var/www/html exists
+            mkdir -p /var/www/html
+
+            # Download and configure WordPress
+            cd /var/www/html
+            wget https://wordpress.org/latest.tar.gz
+            tar -xzf latest.tar.gz
+            cp -r wordpress/* .
+            rm -rf wordpress latest.tar.gz
+
+            # Set permissions
+            chown -R apache:apache /var/www/html
+            chmod -R 755 /var/www/html
+
+            # Create wp-config with dummy DB config (you can replace it with real one)
+            cp wp-config-sample.php wp-config.php
+            sed -i "s/database_name_here/wordpress/" wp-config.php
+            sed -i "s/username_here/admin/" wp-config.php
+            sed -i "s/password_here/admin/" wp-config.php
+            mysql -u root -p"admin" <<EOF
+            CREATE DATABASE IF NOT EXISTS wordpress;
+            CREATE USER IF NOT EXISTS 'admin'@'localhost' IDENTIFIED BY 'admin';
+            GRANT ALL PRIVILEGES ON wordpress.* TO 'admin'@'localhost';
+            FLUSH PRIVILEGES;
+            EOF
+            echo "✅ Database and user created successfully!"
+            systemctl restart httpd
+
+  HighCPUAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmDescription: "Alarm when CPU exceeds 80%"
+      MetricName: CPUUtilization
+      Namespace: AWS/EC2
+      Statistic: Average
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 80
+      ComparisonOperator: GreaterThanThreshold
+      AlarmActions:
+        - Fn::Sub: arn:aws:sns:${AWS::Region}:account-id:MyTopic
+      Dimensions:
+        - Name: InstanceId
+          Value: {"Ref": "WordPressInstance"}
+
+  EC2StopLambdaExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: [lambda.amazonaws.com]
+            Action: ["sts:AssumeRole"]
+      Policies:
+        - PolicyName: EC2StopPolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action: ["ec2:StopInstances"]
+                Resource: "*"
+              - Effect: Allow
+                Action: ["logs:CreateLogGroup", "logs:CreateLogStream", "logs:PutLogEvents"]
+                Resource: "*"
+
+  StopEC2InstanceLambda:
+    Type: AWS::Lambda::Function
+    Properties:
+      Handler: index.handler
+      Runtime: python3.9
+      Role: !GetAtt EC2StopLambdaExecutionRole.Arn
+      Code:
+        ZipFile: |
+          import boto3
+          def handler(event, context):
+              ec2 = boto3.client('ec2')
+              ec2.stop_instances(InstanceIds=['${WordPressInstance}'])
+      Timeout: 10
+
+  AllowEventsToInvokeLambdaStopInstance:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !Ref StopEC2InstanceLambda
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt StopEC2AtNightRule.Arn
+
+  StopEC2AtNightRule:
+    Type: AWS::Events::Rule
+    Properties:
+      ScheduleExpression: "cron(0 21 * * ? *)"
+      State: ENABLED
+      Targets:
+        - Arn: !GetAtt StopEC2InstanceLambda.Arn
+          Id: "TargetFunctionV1"
+
+  StartEC2InstanceLambda:
+    Type: AWS::Lambda::Function
+    Properties:
+      Handler: index.handler
+      Runtime: python3.9
+      Role: !GetAtt EC2StopLambdaExecutionRole.Arn
+      Code:
+        ZipFile: |
+          import boto3
+          def handler(event, context):
+              ec2 = boto3.client('ec2')
+              ec2.start_instances(InstanceIds=['${WordPressInstance}'])
+      Timeout: 10
+
+  AllowEventsToInvokeLambdaStartInstance:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !Ref StartEC2InstanceLambda
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt StartEC2InMorningRule.Arn
+
+  StartEC2InMorningRule:
+    Type: AWS::Events::Rule
+    Properties:
+      ScheduleExpression: "cron(0 6 * * ? *)"
+      State: ENABLED
+      Targets:
+        - Arn: !GetAtt StartEC2InstanceLambda.Arn
+          Id: "StartInstanceFunction"
 
 Outputs:
   WebsiteURL:
     Description: WordPress Site URL
-    Value: !Sub "http://${WordPressInstance.PublicDnsName}"
+    Value:
+      Fn::Sub: "http://${WordPressInstance.PublicDnsName}"

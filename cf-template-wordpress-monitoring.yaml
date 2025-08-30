@@ -1,0 +1,17 @@
+Resources:
+  HighCPUAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmDescription: "Alarm when CPU exceeds 80%"
+      MetricName: CPUUtilization
+      Namespace: AWS/EC2
+      Statistic: Average
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 80
+      ComparisonOperator: GreaterThanThreshold
+      AlarmActions:
+        - arn:aws:sns:region:account-id:MyTopic
+      Dimensions:
+        - Name: InstanceId
+          Value: {"Ref": "WordPressInstance"}
