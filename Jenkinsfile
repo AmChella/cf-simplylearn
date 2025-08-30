@@ -2,7 +2,7 @@ pipeline {
   agent any
   environment {
     AWS_REGION = 'us-east-1'
-    S3_BUCKET = 'my-cfn-artifacts-bucket'
+    S3_BUCKET = 'slean-cft-artifacts-bucket'
     STACK_NAME = 'my-stack'
     TEMPLATE = 'template.yaml'
   }
