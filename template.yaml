@@ -6,6 +6,14 @@ Parameters:
     Description: EC2 Key Pair
     Type: AWS::EC2::KeyPair::KeyName
 
+  VpcId:
+    Description: VPC where EC2 will be launched
+    Type: AWS::EC2::VPC::Id
+
+  SubnetId:
+    Description: Subnet where EC2 will be launched
+    Type: AWS::EC2::Subnet::Id
+
 Resources:
   WordPressInstanceSecurityGroup:
     Type: AWS::EC2::SecurityGroup
@@ -29,13 +37,12 @@ Resources:
   WordPressInstance:
     Type: AWS::EC2::Instance
     Properties:
-      InstanceType: t4g.medium
-      KeyName:
-        Ref: !Ref KeyName
-        SubnetId: !Ref SubnetId
+      InstanceType: t3.medium
+      KeyName: !Ref KeyName
+      SubnetId: !Ref SubnetId
       SecurityGroupIds:
         - Ref: WordPressInstanceSecurityGroup
-      ImageId: ami-0cf0f6904719783fe # Amazon Linux 2 (region-specific)
+      ImageId: ami-00ca32bbc84273381 # Amazon Linux 2 (region-specific)
       UserData:
         Fn::Base64:
           Fn::Sub: |
@@ -77,6 +84,17 @@ Resources:
             EOF
             echo "✅ Database and user created successfully!"
             systemctl restart httpd
+
+  WordPressEIP:
+    Type: AWS::EC2::EIP
+    Properties:
+      Domain: vpc
+
+  WordPressEIPAssociation:
+    Type: AWS::EC2::EIPAssociation
+    Properties:
+      InstanceId: !Ref WordPressInstance
+      EIP: !Ref WordPressEIP
 
   HighCPUAlarm:
     Type: AWS::CloudWatch::Alarm
@@ -184,3 +202,6 @@ Outputs:
     Description: WordPress Site URL
     Value:
       Fn::Sub: "http://${WordPressInstance.PublicDnsName}"
+  WebsiteIP:
+    Description: WordPress Site EIP (Public IP)
+    Value: !Ref WordPressEIP
