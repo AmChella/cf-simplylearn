@@ -3,7 +3,7 @@ pipeline {
   environment {
     AWS_REGION = 'us-east-1'
     S3_BUCKET  = 'slean-cft-artifacts-bucket'
-    STACK_NAME = 'my-stack'
+    STACK_NAME = 'my-wordpress-stack'
     TEMPLATE   = 'template.yaml'
   }
 
