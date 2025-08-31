@@ -378,7 +378,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - [Cost Optimization Pillar](https://docs.aws.amazon.com/wellarchitected/latest/cost-optimization-pillar/)
 - [Security Best Practices](https://aws.amazon.com/security/security-resources/)
 
-By Chella
+By Chella S
 ---
 
 **Project**: PGP Cloud Computing & AWS Solutions Architect  
