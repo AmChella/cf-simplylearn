@@ -12,6 +12,16 @@ pipeline {
       steps { checkout scm }
     }
 
+    stage('Debug') {
+      steps {
+        sh '''
+          echo "PWD inside pipeline: $(pwd)"
+          echo "Listing contents:"
+          ls -al
+        '''
+      }
+    }
+
     stage('Validate') {
       steps {
         // Inject AWS creds stored as 'Token-Github' (username=accessKey, password=secret)
