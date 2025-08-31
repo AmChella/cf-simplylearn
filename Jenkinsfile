@@ -62,6 +62,10 @@ pipeline {
             --stack-name ${env.STACK_NAME} \
             --capabilities CAPABILITY_NAMED_IAM CAPABILITY_IAM \
             --parameter-overrides KeyName=Aadvik \
+            --parameter-overrides \
+              KeyName=my-keypair \
+              VpcId=vpc-0791ac266363f50f2 \
+              SubnetId=subnet-0ee037a1617af0674 \
             --no-fail-on-empty-changeset
         """
       }
