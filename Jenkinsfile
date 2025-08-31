@@ -70,7 +70,7 @@ pipeline {
   }
 
   post {
-    success { echo "CloudFormation deploy succeeded" }
+    success { echo "CloudFormation deploy succeeded!!!" }
     failure { echo "CloudFormation deploy failed"; archiveArtifacts artifacts: '**/packaged.yaml', allowEmptyArchive: true }
   }
 }
