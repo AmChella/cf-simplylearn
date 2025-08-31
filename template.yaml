@@ -11,6 +11,7 @@ Resources:
     Type: AWS::EC2::SecurityGroup
     Properties:
       GroupDescription: Enable HTTP, HTTPS, and SSH
+      VpcId: !Ref VpcId
       SecurityGroupIngress:
         - IpProtocol: tcp
           FromPort: 22
@@ -30,7 +31,8 @@ Resources:
     Properties:
       InstanceType: t4g.medium
       KeyName:
-        Ref: KeyName
+        Ref: !Ref KeyName
+        SubnetId: !Ref SubnetId
       SecurityGroupIds:
         - Ref: WordPressInstanceSecurityGroup
       ImageId: ami-0cf0f6904719783fe # Amazon Linux 2 (region-specific)
