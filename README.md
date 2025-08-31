@@ -13,6 +13,8 @@
 - [Deployment Instructions](#deployment-instructions)
   - [AWS Console Deployment](#aws-console-deployment)
   - [AWS CLI Deployment](#aws-cli-deployment)
+  - [CI/CD with Jenkins](#cicd-with-jenkins)
+- [IAM Permissions](#iam-permissions)
 - [Usage & Management](#usage--management)
 - [Monitoring](#monitoring)
 - [Cost Optimization](#cost-optimization)
@@ -28,54 +30,76 @@ This project is part of the **PGP Cloud Computing & AWS Solutions Architect** pr
 
 The solution deploys a complete LAMP stack (Linux, Apache, MySQL, PHP) on a single EC2 instance with automated WordPress installation, CloudWatch monitoring, and cost optimization features through scheduled start/stop functionality.
 
+### Project Structure
+
+```
+project-PGP-CC-AWS-Solutions-Architect/
+├── README.md              # This comprehensive documentation
+├── template.yaml          # Main CloudFormation template
+├── Jenkinsfile           # CI/CD pipeline configuration
+├── iAmRole.json          # IAM policy for deployment permissions
+├── LICENSE               # MIT License
+└── .git/                 # Git version control
+```
+
 ### Technologies Used
 - **AWS CloudFormation** - Infrastructure as Code
-- **Amazon EC2** - Compute instance (t4g.medium, Graviton2 processor)
+- **Amazon EC2** - Compute instance (t3.medium)
 - **Amazon Linux 2** - Operating system
 - **Apache HTTP Server** - Web server
 - **PHP 8.4** - Server-side scripting
-- **MariaDB** - Database server
+- **MariaDB 10.5** - Database server
 - **WordPress** - Content Management System
 - **CloudWatch** - Monitoring and alerting
 - **Lambda** - Serverless functions for automation
 - **EventBridge** - Scheduled events
+- **Jenkins** - CI/CD pipeline automation
 
 ### Estimated Monthly Cost
-- **EC2 t4g.medium (if running 24/7)**: ~$25-30/month
-- **With scheduled shutdown (12 hours/day)**: ~$12-15/month
-- **Additional services** (CloudWatch, Lambda): <$5/month
+- **EC2 t3.medium (if running 24/7)**: ~$30-35/month
+- **With scheduled shutdown (12 hours/day)**: ~$15-18/month
+- **Additional services** (CloudWatch, Lambda, EIP): <$10/month
 
 ## Solution Architecture
 
 ```
 ┌─────────────────┐    ┌──────────────────┐    ┌─────────────────┐
 │   Internet      │────│  Security Group  │────│   EC2 Instance  │
-│   Gateway       │    │  (HTTP/HTTPS/SSH)│    │   (WordPress)   │
+│   Gateway       │    │  (HTTP/HTTPS/SSH)│    │   (t3.medium)   │
+│                 │    │                  │    │   WordPress     │
 └─────────────────┘    └──────────────────┘    └─────────────────┘
-                                                         │
-                                                         ▼
+                                │                        │
+                                │                        ▼
+┌─────────────────┐    ┌────────▼──────────┐    ┌─────────────────┐
+│  CloudWatch     │    │     Lambda        │    │   MariaDB       │
+│  Alarms         │────│   Functions       │    │   Database      │
+│  (CPU > 80%)    │    │ (Start/Stop EC2)  │    │   (Local)       │
+└─────────────────┘    └───────────────────┘    └─────────────────┘
+                                │                        │
+                                ▼                        │
+                       ┌──────────────────┐              │
+                       │   EventBridge    │              │
+                       │   Rules          │              │
+                       │  (6AM/9PM CRON)  │              │
+                       └──────────────────┘              │
+                                                          ▼
 ┌─────────────────┐    ┌──────────────────┐    ┌─────────────────┐
-│  CloudWatch     │    │     Lambda       │    │   MariaDB       │
-│  Alarms         │────│   Functions      │    │   Database      │
-│  (CPU > 80%)    │    │ (Start/Stop EC2) │    │   (Local)       │
+│   Jenkins       │────│     IAM Role     │────│  Elastic IP     │
+│  CI/CD Pipeline │    │   Permissions    │    │  (Static IP)    │
 └─────────────────┘    └──────────────────┘    └─────────────────┘
-                                │
-                                ▼
-                       ┌──────────────────┐
-                       │   EventBridge    │
-                       │   Rules          │
-                       │  (6AM/9PM CRON)  │
-                       └──────────────────┘
 ```
 
 ### Key Components
 
-1. **EC2 Instance**: Hosts the complete LAMP stack with WordPress
+1. **EC2 Instance**: Hosts the complete LAMP stack with WordPress (t3.medium)
 2. **Security Group**: Controls inbound traffic (ports 22, 80, 443)
-3. **CloudWatch Alarm**: Monitors CPU utilization
-4. **Lambda Functions**: Automate instance start/stop for cost optimization
-5. **EventBridge Rules**: Schedule instance operations
-6. **IAM Role**: Provides necessary permissions for Lambda execution
+3. **Elastic IP**: Provides persistent public IP address
+4. **CloudWatch Alarm**: Monitors CPU utilization and triggers notifications
+5. **Lambda Functions**: Automate instance start/stop for cost optimization
+6. **EventBridge Rules**: Schedule instance operations (6 AM start, 9 PM stop)
+7. **IAM Role**: Provides necessary permissions for Lambda execution
+8. **Jenkins Pipeline**: Automates deployment and infrastructure updates
+9. **VPC/Subnet**: Network isolation and security boundaries
 
 ## Features
 
@@ -98,7 +122,7 @@ The solution deploys a complete LAMP stack (Linux, Apache, MySQL, PHP) on a sing
 ✅ **Cost Optimization**
 - Automated instance shutdown at 9 PM
 - Automated instance startup at 6 AM
-- Graviton2 processor for better price/performance
+- Elastic IP for persistent public IP address
 
 ✅ **Infrastructure as Code**
 - Version controlled CloudFormation templates
@@ -124,8 +148,8 @@ Your AWS user/role needs permissions for:
 
 ### System Requirements
 - **Region**: Any AWS region with EC2 availability
-- **VPC**: Uses default VPC (can be modified)
-- **Instance Type**: t4g.medium (Graviton2, can be changed)
+- **VPC**: Existing VPC with public subnet (required parameter)
+- **Instance Type**: t3.medium (can be changed)
 
 ## Deployment Instructions
 
@@ -138,13 +162,15 @@ Your AWS user/role needs permissions for:
 
 2. **Upload Template**
    - Select "Upload a template file"
-   - Choose `cf-template-wordpress.yaml`
+   - Choose `template.yaml`
    - Click "Next"
 
 3. **Configure Parameters**
    ```
    Stack Name: wordpress-stack
    KeyName: [Select your EC2 Key Pair]
+   VpcId: [Select your VPC ID]
+   SubnetId: [Select a public subnet ID]
    ```
 
 4. **Review and Deploy**
@@ -163,10 +189,13 @@ Your AWS user/role needs permissions for:
 2. **Deploy Stack**
    ```bash
    aws cloudformation deploy \
-     --template-file cf-template-wordpress.yaml \
+     --template-file template.yaml \
      --stack-name wordpress-stack \
-     --parameter-overrides KeyName=your-key-pair-name \
-     --capabilities CAPABILITY_IAM \
+     --parameter-overrides \
+       KeyName=your-key-pair-name \
+       VpcId=vpc-xxxxxxxxx \
+       SubnetId=subnet-xxxxxxxxx \
+     --capabilities CAPABILITY_NAMED_IAM CAPABILITY_IAM \
      --region us-east-1
    ```
 
@@ -185,11 +214,134 @@ Your AWS user/role needs permissions for:
      --output text
    ```
 
+### CI/CD with Jenkins
+
+This project includes a Jenkins pipeline for automated deployment. The `Jenkinsfile` defines a complete CI/CD workflow.
+
+#### Pipeline Features
+
+- **Automatic Checkout**: Pulls the latest code from the repository
+- **Template Validation**: Validates CloudFormation template syntax
+- **Packaging**: Packages Lambda functions and uploads artifacts to S3
+- **Deployment**: Deploys the CloudFormation stack with predefined parameters
+- **Error Handling**: Archives artifacts and provides detailed error reporting
+
+#### Environment Variables
+
+The pipeline uses the following environment variables:
+
+| Variable | Value | Description |
+|----------|-------|-------------|
+| `AWS_REGION` | us-east-1 | Target AWS region for deployment |
+| `S3_BUCKET` | slean-cft-artifacts-bucket | S3 bucket for storing artifacts |
+| `STACK_NAME` | my-wordpress-stack | CloudFormation stack name |
+| `TEMPLATE` | template.yaml | CloudFormation template file |
+
+#### Prerequisites for Jenkins
+
+1. **Jenkins Server** with AWS CLI configured
+2. **AWS IAM Role** with appropriate permissions (see IAM section below)
+3. **S3 Bucket** for storing packaged artifacts
+4. **Jenkins Plugins**: AWS Pipeline, CloudFormation Plugin
+
+#### Pipeline Stages
+
+1. **Checkout**: Downloads source code from repository
+2. **Debug**: Displays current directory and AWS caller identity
+3. **Validate**: Validates CloudFormation template syntax
+4. **Package**: Packages template and uploads to S3 if needed
+5. **Deploy**: Deploys the CloudFormation stack
+
+```bash
+# Example: Trigger pipeline manually
+# The pipeline automatically uses these parameter overrides:
+KeyName=Aadvik
+VpcId=vpc-0791ac266363f50f2
+SubnetId=subnet-0ee037a1617af0674
+```
+
 ### Parameter Reference
 
 | Parameter | Description | Default | Required |
 |-----------|-------------|---------|----------|
 | `KeyName` | EC2 Key Pair name for SSH access | - | Yes |
+| `VpcId` | VPC where EC2 will be launched | - | Yes |
+| `SubnetId` | Public subnet where EC2 will be launched | - | Yes |
+
+## IAM Permissions
+
+This project includes a comprehensive IAM policy (`iAmRole.json`) that defines the minimum required permissions for deploying and managing the WordPress infrastructure.
+
+### Required AWS Services Permissions
+
+The IAM policy grants permissions for:
+
+#### CloudFormation Operations
+- Create, update, delete, and describe stacks
+- Manage change sets and templates
+- Validate templates
+
+#### EC2 Operations
+- Launch and terminate instances
+- Create and manage security groups
+- Manage Elastic IP addresses
+- Describe EC2 resources
+
+#### Lambda Operations
+- Create, update, and delete Lambda functions
+- Manage function permissions
+- Configure function settings
+
+#### EventBridge (CloudWatch Events)
+- Create and manage scheduled rules
+- Configure rule targets
+- Enable/disable rules
+
+#### CloudWatch Operations
+- Create and manage alarms
+- Configure alarm actions
+
+#### IAM Operations
+- Create and manage service roles
+- Attach and detach policies
+- Pass roles to AWS services
+
+#### S3 Operations (for CI/CD)
+- Upload and download objects from artifact bucket
+- List bucket contents
+
+### Setting Up IAM Role
+
+1. **Create IAM Role**:
+   ```bash
+   aws iam create-role \
+     --role-name WordPress-CloudFormation-Role \
+     --assume-role-policy-document file://trust-policy.json
+   ```
+
+2. **Attach Custom Policy**:
+   ```bash
+   aws iam put-role-policy \
+     --role-name WordPress-CloudFormation-Role \
+     --policy-name WordPress-Deployment-Policy \
+     --policy-document file://iAmRole.json
+   ```
+
+3. **Use Role in Deployment**:
+   ```bash
+   aws cloudformation deploy \
+     --template-file template.yaml \
+     --stack-name wordpress-stack \
+     --role-arn arn:aws:iam::ACCOUNT-ID:role/WordPress-CloudFormation-Role \
+     --capabilities CAPABILITY_NAMED_IAM CAPABILITY_IAM
+   ```
+
+### Security Best Practices
+
+- ✅ **Principle of Least Privilege**: Policy grants only necessary permissions
+- ✅ **Resource Constraints**: Some permissions limited to specific resource patterns
+- ✅ **Service-Specific**: Permissions scoped to required AWS services only
+- ⚠️ **Production Note**: Consider further restricting resources by tags or naming patterns
 
 ## Usage & Management
 
