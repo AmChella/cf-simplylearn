@@ -24,8 +24,8 @@ pipeline {
 
     stage('Validate') {
       steps {
-        // Inject AWS creds stored as 'Token-Github' (username=accessKey, password=secret)
-        withCredentials([usernamePassword(credentialsId: 'Token-Github',
+        // Inject AWS creds stored as 'GITHUB-Token' (username=accessKey, password=secret)
+        withCredentials([usernamePassword(credentialsId: 'GITHUB-Token',
                                           usernameVariable: 'AWS_ACCESS_KEY_ID',
                                           passwordVariable: 'AWS_SECRET_ACCESS_KEY')]) {
           sh 'aws --version'
@@ -36,7 +36,7 @@ pipeline {
 
     stage('Package (if needed)') {
       steps {
-        withCredentials([usernamePassword(credentialsId: 'Token-Github',
+        withCredentials([usernamePassword(credentialsId: 'GITHUB-Token',
                                           usernameVariable: 'AWS_ACCESS_KEY_ID',
                                           passwordVariable: 'AWS_SECRET_ACCESS_KEY')]) {
           // Only run package if template references local artifacts
@@ -53,7 +53,7 @@ pipeline {
 
     stage('Deploy') {
       steps {
-        withCredentials([usernamePassword(credentialsId: 'Token-Github',
+        withCredentials([usernamePassword(credentialsId: 'GITHUB-Token',
                                           usernameVariable: 'AWS_ACCESS_KEY_ID',
                                           passwordVariable: 'AWS_SECRET_ACCESS_KEY')]) {
           sh """
