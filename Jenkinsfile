@@ -61,6 +61,7 @@ pipeline {
             --template-file packaged.yaml \
             --stack-name ${env.STACK_NAME} \
             --capabilities CAPABILITY_NAMED_IAM CAPABILITY_IAM \
+            --parameter-overrides KeyName=Aadvik \
             --no-fail-on-empty-changeset
         """
       }
